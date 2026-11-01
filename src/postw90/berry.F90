@@ -3203,6 +3203,7 @@ contains
                         I_n_tra_1(3, 6), I_n_tra_2(3, 6)
     real(kind=dp) :: joint_level_spacing
     real(kind=dp) :: eta_smr, Delta_k, vdum(3), occ_fac, docc_fac, ddocc_fac
+    real(kind=dp) :: om_n(3, 3)
 
     complex(kind=dp) :: e1w, e1wmn, e1wnm, e2wmn
     real(kind=dp) :: arg1w, delta1w, arg1wmn, delta1wmn, arg1wnm, delta1wnm, arg2wmn, delta2wmn, fermi_energy, kt, &
@@ -3634,6 +3635,16 @@ contains
                                have_disentangled, seedname, stdout, timer, error, comm, occ_fake)
       if (allocated(error)) return
 
+      ! Berry curvature tensor Omega_n^{ac} = epsilon_{acd} Omega_n^d: imf_k(j, d, 1) holds the three
+      ! terms j of the pseudovector component d (see berry_get_imfgh_klist), so sum over j
+      om_n = 0.0_dp
+      om_n(2, 3) = sum(imf_k(:, 1, 1))
+      om_n(3, 1) = sum(imf_k(:, 2, 1))
+      om_n(1, 2) = sum(imf_k(:, 3, 1))
+      om_n(3, 2) = -om_n(2, 3)
+      om_n(1, 3) = -om_n(3, 1)
+      om_n(2, 1) = -om_n(1, 2)
+
       ! construct the Berry curvature dipole 1-band intraband transition matrix elements
       ! (see Eq. (22.b) of GGKIA23 and Eq. (2) of TPS18)
       ! note that SHG is symmetric under b <--> c exchange,
@@ -3642,7 +3653,7 @@ contains
         do bc = 1, 6
           b = alpha_S(bc)
           c = beta_S(bc)
-          I_n_tra_2(a, bc) = docc_fac*(eig_da(n, b)*imf_k(a, c, 1) + eig_da(n, c)*imf_k(a, b, 1))
+          I_n_tra_2(a, bc) = docc_fac*(eig_da(n, b)*om_n(a, c) + eig_da(n, c)*om_n(a, b))
         enddo
       enddo
 
