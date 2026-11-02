@@ -3200,6 +3200,7 @@ contains
     complex(kind=dp) :: I_nm_ter_1(3, 6), I_nm_ter_2(3, 6), I_nm_ter_3(3, 6), &
                         I_nm_tra_1(3, 6), I_nm_tra_2(3, 6), &
                         I_nmp_ter_1(3, 6), I_nmp_ter_2(3, 6), I_nmp_ter_3(3, 6), &
+                        S_nmp_ter_1(3, 6), S_nmp_ter_23(3, 6), &
                         I_n_tra_1(3, 6), I_n_tra_2(3, 6)
     real(kind=dp) :: joint_level_spacing
     real(kind=dp) :: eta_smr, Delta_k, vdum(3), occ_fac, docc_fac, ddocc_fac
@@ -3499,6 +3500,10 @@ contains
         enddo
 
         ! loop on intermediate band
+        ! the frequency-dependent factors of the 3-band terms only depend on (n,m),
+        ! so the matrix elements are summed over p first and the frequency loop is done once
+        S_nmp_ter_1 = cmplx_0
+        S_nmp_ter_23 = cmplx_0
         do p = 1, num_wann
           ! cycle diagonal matrix elements and bands above the maximum
           if (n == m .or. p == n .or. p == m) cycle
@@ -3526,43 +3531,42 @@ contains
             enddo !bc
           enddo !a
 
-          do ifreq = 1, pw90_berry%kubo_nfreq
-            ! compute 1/(E_nm-w)
-            e1wnm = real(pw90_berry%kubo_freq_list(ifreq), dp) + cmplx_i*eta_smr
-            arg1wnm = (eig(n) - eig(m) - real(e1wnm, dp))/eta_smr
-            delta1wnm = utility_w0gauss(arg1wnm, pw90_berry%kubo_smearing%type_index, error, comm)/eta_smr
-            if (allocated(error)) return
-            ! compute 1/(E_mn-2w)
-            e2wmn = 2.d0*real(pw90_berry%kubo_freq_list(ifreq), dp) + cmplx_i*eta_smr
-            arg2wmn = (eig(m) - eig(n) - real(e2wmn, dp))/eta_smr
-            delta2wmn = utility_w0gauss(arg2wmn, pw90_berry%kubo_smearing%type_index, error, comm)/eta_smr
-            if (allocated(error)) return
-
-            ! compute 3-band terms of SHG polarizability
-            ! see 3-band terms of Eqs. (22.a) -SHG interband polarizability-
-            shg_alpha_k_list(:, :, ifreq) = shg_alpha_k_list(:, :, ifreq) &
-                                            + 0.5d0*occ_fac*( &
-                                            2.d0*I_nmp_ter_1(:, :) &
-                                            *(real(1.d0/(eig(m) - eig(n) - e2wmn), dp) + cmplx_i*pi*delta2wmn) &
-                                            + I_nmp_ter_2(:, :) &
-                                            *(real(1.d0/(eig(n) - eig(m) - e1wnm), dp) + cmplx_i*pi*delta1wnm) &
-                                            + I_nmp_ter_3(:, :) &
-                                            *(real(1.d0/(eig(n) - eig(m) - e1wnm), dp) + cmplx_i*pi*delta1wnm))
-
-            ! compute 3-band terms of SHG conductivity
-            ! see 3-band terms of Eq. (22.a) -SHG interband polarizability-
-            ! polarizability is passed to conductivity by multiplying it by -i*2*w and simplifying it
-            shg_sigma_k_list(:, :, ifreq) = shg_sigma_k_list(:, :, ifreq) &
-                                            - cmplx_i*occ_fac*( &
-                                            I_nmp_ter_1(:, :)*(eig(m) - eig(n)) &
-                                            *(real(1.d0/(eig(m) - eig(n) - e2wmn), dp) + cmplx_i*pi*delta2wmn) &
-                                            + I_nmp_ter_2(:, :)*(eig(n) - eig(m)) &
-                                            *(real(1.d0/(eig(n) - eig(m) - e1wnm), dp) + cmplx_i*pi*delta1wnm) &
-                                            + I_nmp_ter_3(:, :)*(eig(n) - eig(m)) &
-                                            *(real(1.d0/(eig(n) - eig(m) - e1wnm), dp) + cmplx_i*pi*delta1wnm))
-          enddo
+          S_nmp_ter_1 = S_nmp_ter_1 + I_nmp_ter_1
+          S_nmp_ter_23 = S_nmp_ter_23 + I_nmp_ter_2 + I_nmp_ter_3
 
         enddo !bands
+
+        do ifreq = 1, pw90_berry%kubo_nfreq
+          ! compute 1/(E_nm-w)
+          e1wnm = real(pw90_berry%kubo_freq_list(ifreq), dp) + cmplx_i*eta_smr
+          arg1wnm = (eig(n) - eig(m) - real(e1wnm, dp))/eta_smr
+          delta1wnm = utility_w0gauss(arg1wnm, pw90_berry%kubo_smearing%type_index, error, comm)/eta_smr
+          if (allocated(error)) return
+          ! compute 1/(E_mn-2w)
+          e2wmn = 2.d0*real(pw90_berry%kubo_freq_list(ifreq), dp) + cmplx_i*eta_smr
+          arg2wmn = (eig(m) - eig(n) - real(e2wmn, dp))/eta_smr
+          delta2wmn = utility_w0gauss(arg2wmn, pw90_berry%kubo_smearing%type_index, error, comm)/eta_smr
+          if (allocated(error)) return
+
+          ! compute 3-band terms of SHG polarizability
+          ! see 3-band terms of Eqs. (22.a) -SHG interband polarizability-
+          shg_alpha_k_list(:, :, ifreq) = shg_alpha_k_list(:, :, ifreq) &
+                                          + 0.5d0*occ_fac*( &
+                                          2.d0*S_nmp_ter_1(:, :) &
+                                          *(real(1.d0/(eig(m) - eig(n) - e2wmn), dp) + cmplx_i*pi*delta2wmn) &
+                                          + S_nmp_ter_23(:, :) &
+                                          *(real(1.d0/(eig(n) - eig(m) - e1wnm), dp) + cmplx_i*pi*delta1wnm))
+
+          ! compute 3-band terms of SHG conductivity
+          ! see 3-band terms of Eq. (22.a) -SHG interband polarizability-
+          ! polarizability is passed to conductivity by multiplying it by -i*2*w and simplifying it
+          shg_sigma_k_list(:, :, ifreq) = shg_sigma_k_list(:, :, ifreq) &
+                                          - cmplx_i*occ_fac*( &
+                                          S_nmp_ter_1(:, :)*(eig(m) - eig(n)) &
+                                          *(real(1.d0/(eig(m) - eig(n) - e2wmn), dp) + cmplx_i*pi*delta2wmn) &
+                                          + S_nmp_ter_23(:, :)*(eig(n) - eig(m)) &
+                                          *(real(1.d0/(eig(n) - eig(m) - e1wnm), dp) + cmplx_i*pi*delta1wnm))
+        enddo
 
       enddo ! bands
 
