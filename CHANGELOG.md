@@ -4,6 +4,14 @@
 
 - Calculation of linear optical response and nonlinear second-harmonic generation for semiconductors and metals with the possibility to include many-body excitonis effects within the static long-range approximation according to the formalism given in P. Garcia-Goiricelaya, J. Krishna and J. Ibañez-Azpiroz, Phys. Rev. B 107, 205101 (2023) + example 34 + example35
 
+### Bug fixes
+
+- Fix the Berry-curvature tensor used in the metallic SHG Berry-curvature-dipole term.
+
+### Changes
+
+- The one-band (Fermi-surface) SHG terms at T > 0 use the analytic energy derivatives of the Fermi-Dirac occupations of the two- and three-band terms instead of a Gaussian of width kT.
+
 ## v3.1.0 (5th March 2020)
 
 ### New features
